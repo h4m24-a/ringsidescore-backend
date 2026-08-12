@@ -34,7 +34,8 @@ function refreshCookieOptions() {
   return {
     httpOnly: true, // not readable by client-side JS — the main XSS protection here
     secure: process.env.NODE_ENV === "production", // HTTPS only in prod; allow http in local dev
-    sameSite: "lax",
+    sameSite: "none", // allow cross-site requests (frontend and backend are on different origins)
+    partitioned: "none", // don't send the cookie on cross-site requests that aren't same-site
     path: "/api/auth", // only sent to auth routes, not every request
     maxAge: REFRESH_TOKEN_TTL_MS,
   };
