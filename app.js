@@ -14,6 +14,10 @@ const routes = require("./routes");
 
 const app = express();
 
+// If running behind a proxy (e.g., Railway, Heroku), trust the first proxy
+// so secure cookies and rate limiting see the correct client IP.
+app.set("trust proxy", 1);
+
 app.use(helmet());
 // Allow a comma-separated list in CLIENT_ORIGIN (e.g. "https://ringsidescore.com,http://localhost:5173")
 const rawOrigins = process.env.CLIENT_ORIGIN || "http://localhost:5173";
