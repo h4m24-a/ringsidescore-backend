@@ -16,22 +16,24 @@ const app = express();
 
 app.set("trust proxy", 1);
 
+// For debugging: reflect the request Origin so `Access-Control-Allow-Origin`
+// is always present. Keep credentials enabled (will echo the origin).
 const corsOptions = {
-  origin: (origin, callback) => {
-    const allowedOrigins = [process.env.CLIENT_ORIGIN, "https://ringsidescore.com"];
-    // allow no-origin requests (curl, server-to-server, some mobile clients)
-    if (!origin || allowedOrigins.includes(origin)) {
-      callback(null, true);
-    } else {
-      console.log(`CORS blocked origin: ${origin}`); // temporary — helps confirm what's actually arriving
-      callback(new Error("Not allowed by CORS"));
-    }
-  },
+  origin: process.env.CLIENT_ORIGIN,
   credentials: true,
+  methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"],
+  allowedHeaders: ["Content-Type", "Authorization"],
+  optionsSuccessStatus: 200,
 };
 
+// Log incoming origin for diagnostics
+app.use((req, res, next) => {
+  if (req.headers.origin) console.log("REQ ORIGIN:", req.method, req.originalUrl, req.headers.origin);
+  next();
+});
+
+app.options("*", cors(corsOptions));
 app.use(cors(corsOptions));
-app.options("*", cors(corsOptions)); // explicit preflight handling — don't rely on it being automatic;
 
 app.use(morgan(process.env.NODE_ENV === "production" ? "combined" : "dev"));
 app.use(express.json());
