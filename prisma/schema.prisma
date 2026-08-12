@@ -1,0 +1,178 @@
+// ============================================================
+// Ringside — Prisma schema
+// ============================================================
+// Design notes (read before extending):
+// - `titles` on Fight is a plain Postgres string array (["WBC","RING"])
+//   rather than a join table — it matches the frontend's shape exactly and
+//   there's no need to query "all fights with WBC gold" independently yet.
+// - Fight.isMainEvent (not Event.mainEventId) marks the headliner. An
+//   mainEventId FK on Event pointing at Fight would create a circular
+//   foreign key with Fight.eventId — a boolean avoids that entirely. "At
+//   most one main event per event" is enforced in the controller, not the DB.
+// - Official result fields live directly on Fight (nullable) rather than a
+//   separate OfficialResult table, since it's a strict 1:1 and simple.
+// - Scorecard.rounds is a JSON blob (array of {round, a, b, even,
+//   knockdownA, knockdownB}) rather than a normalized Round table. Start
+//   simple; only normalize if you need to query at the round level.
+// - User.refreshTokenHash is stored HASHED (like the password), never the
+//   raw refresh token — see controller/authController.js.
+//
+// Prisma 7: this project uses the driver-adapter architecture. DATABASE_URL
+// lives in prisma.config.js (CLI) and is passed to @prisma/adapter-pg at
+// runtime (db/prismaClient.js) — not in the datasource block below.
+// ============================================================
+
+generator client {
+  provider     = "prisma-client-js"
+  output       = "../generated/prisma"
+  moduleFormat = "cjs" // keeps the generated client CommonJS — no ESM rewrite of the rest of the app needed
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum Role {
+  USER
+  ORGANIZER
+  ADMIN
+}
+
+enum ScorecardStatus {
+  LIVE
+  FINAL
+}
+
+// KO / TKO / DQ / NC — null resultCode means it went the distance (decision)
+enum StoppageCode {
+  KO
+  TKO
+  DQ
+  NC
+}
+
+model User {
+  id           String   @id @default(cuid())
+  name         String
+  email        String   @unique
+  passwordHash String
+  role         Role     @default(USER)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  // Refresh token is stored HASHED (like the password) — never the raw
+  // token — so a DB leak alone doesn't let anyone mint new access tokens.
+  // Single column = one active session per user; see README for the
+  // multi-device (separate RefreshToken table) upgrade path.
+  refreshTokenHash      String?
+  refreshTokenExpiresAt DateTime?
+
+
+  // Same hashed-token pattern as the refresh token — not  storing the raw
+  // reset token, just its bcrypt hash + an expiry.
+  passwordResetTokenHash      String?
+  passwordResetTokenExpiresAt DateTime?
+
+  eventsCreated Event[]     @relation("EventsCreatedByUser")
+  scorecards    Scorecard[]
+
+  @@map("users")
+}
+
+model Fighter {
+  id        String   @id @default(cuid())
+  name      String
+  wins      Int      @default(0)
+  losses    Int      @default(0)
+  draws     Int      @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  boutsAsFighterA   Fight[] @relation("FighterABouts")
+  boutsAsFighterB   Fight[] @relation("FighterBBouts")
+  officialWinsCount Fight[] @relation("OfficialWinner")
+  scorecardWins     Scorecard[]
+
+  @@map("fighters")
+}
+
+model Event {
+  id        String   @id @default(cuid())
+  name      String
+  venue     String
+  date      DateTime
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  createdById String
+  createdBy   User   @relation("EventsCreatedByUser", fields: [createdById], references: [id])
+
+  fights Fight[]
+
+  @@map("events")
+}
+
+model Fight {
+  id              String   @id @default(cuid())
+  eventId         String
+  isMainEvent     Boolean  @default(false)
+  weightClass     String
+  scheduledRounds Int      @default(12)
+  titles          String[] // subset of "WBC" | "WBA" | "IBF" | "WBO" | "RING"
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  event Event @relation(fields: [eventId], references: [id], onDelete: Cascade)
+
+  fighterAId String
+  fighterA   Fighter @relation("FighterABouts", fields: [fighterAId], references: [id])
+  fighterBId String
+  fighterB   Fighter @relation("FighterBBouts", fields: [fighterBId], references: [id])
+
+  // --- official result (nullable until the fight actually happens) ---
+  officialMethod       String? // "Unanimous Decision" | "Split Decision" | "TKO" | ...
+  officialStoppageCode StoppageCode?
+  officialRoundStopped Int?
+  officialRoundWinners Json? // ["A","A","B",...] — one entry per round reached
+  officialWinnerId     String?
+  officialWinner       Fighter? @relation("OfficialWinner", fields: [officialWinnerId], references: [id])
+  officialResultIsDraw Boolean  @default(false)
+
+  scorecards Scorecard[]
+
+  @@index([eventId])
+  @@map("fights")
+}
+
+model Scorecard {
+  id     String          @id @default(cuid())
+  status ScorecardStatus @default(LIVE)
+
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  fightId String
+  fight   Fight  @relation(fields: [fightId], references: [id], onDelete: Cascade)
+
+  // live round-by-round data: [{ round, a, b, even, knockdownA, knockdownB }]
+  rounds Json
+
+  // populated only once status = FINAL
+  resultType      String? // "decision" | "stoppage"
+  stoppageCode    StoppageCode?
+  roundStopped    Int?
+  winnerFighterId String?
+  winnerFighter   Fighter? @relation(fields: [winnerFighterId], references: [id])
+  isDraw          Boolean  @default(false)
+  totalA          Int?
+  totalB          Int?
+
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  finalizedAt DateTime?
+
+  // one live/final scorecard per user per fight
+  @@unique([userId, fightId])
+  @@index([fightId])
+  @@map("scorecards")
+}
