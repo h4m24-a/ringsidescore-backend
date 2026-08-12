@@ -9,6 +9,12 @@ const sendPasswordResetEmail = async ({ to, resetLink }) => {
     subject: "Reset your password",
     html: `
       <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+        <p style="text-align: center; margin: 0 0 24px 0;">
+          <span style="font-size: 20px; font-weight: 700; letter-spacing: 1px;">
+            <span style="color: #111111;">RING</span><span style="color: #7A1F1F;">SIDE</span>
+          </span>
+        </p>
+
         <h2>Reset your password</h2>
 
         <p>
