@@ -17,14 +17,21 @@ const app = express();
 app.set("trust proxy", 1);
 
 const corsOptions = {
-  origin: process.env.CLIENT_ORIGIN || "http://localhost:5173",
+  origin: (origin, callback) => {
+    const allowedOrigins = [process.env.CLIENT_ORIGIN, "https://ringsidescore.com"];
+    // allow no-origin requests (curl, server-to-server, some mobile clients)
+    if (!origin || allowedOrigins.includes(origin)) {
+      callback(null, true);
+    } else {
+      console.log(`CORS blocked origin: ${origin}`); // temporary — helps confirm what's actually arriving
+      callback(new Error("Not allowed by CORS"));
+    }
+  },
   credentials: true,
-  methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"],
-  allowedHeaders: ["Content-Type", "Authorization"]
 };
 
-app.options("*", cors());
 app.use(cors(corsOptions));
+app.options("*", cors(corsOptions)); // explicit preflight handling — don't rely on it being automatic;
 
 app.use(morgan(process.env.NODE_ENV === "production" ? "combined" : "dev"));
 app.use(express.json());
