@@ -163,14 +163,12 @@ const forgotPassword = asyncHandler(async (req, res) => {
     const resetToken = crypto.randomBytes(32).toString("hex");
     await storePasswordResetToken(user.id, resetToken, new Date(Date.now() + PASSWORD_RESET_TTL_MS));
 
-    const resetLink = `${process.env.FRONTEND_URL || "http://localhost:5173"}/reset-password?userId=${user.id}&token=${resetToken}`;
+    const resetLink = `${process.env.FRONTEND_URL}/reset-password?userId=${user.id}&token=${resetToken}`;
 
-    // TODO: wire up a real mailer (nodemailer + SMTP/SendGrid/Resend/etc.)
     await sendPasswordResetEmail({
       to: email,
       resetLink: resetLink
     })
-    console.log(`[password reset] ${email} -> ${resetLink}`);
   }
 
   res.json({ message: "If that email is registered, a password reset link has been sent." });
