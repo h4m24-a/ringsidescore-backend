@@ -23,6 +23,7 @@ const corsOptions = {
   allowedHeaders: ["Content-Type", "Authorization"]
 };
 
+app.options("*", cors());
 app.use(cors(corsOptions));
 
 app.use(morgan(process.env.NODE_ENV === "production" ? "combined" : "dev"));
