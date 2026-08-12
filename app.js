@@ -15,10 +15,22 @@ const routes = require("./routes");
 const app = express();
 
 app.use(helmet());
+// Allow a comma-separated list in CLIENT_ORIGIN (e.g. "https://ringsidescore.com,http://localhost:5173")
+const rawOrigins = process.env.CLIENT_ORIGIN || "http://localhost:5173";
+const allowedOrigins = rawOrigins.split(",").map((s) => s.trim());
+
 app.use(
   cors({
-    origin: process.env.CLIENT_ORIGIN || "http://localhost:5173",
+    origin: (origin, cb) => {
+      // no origin means same-origin or server-to-server request (allow)
+      if (!origin) return cb(null, true);
+      if (allowedOrigins.includes(origin)) return cb(null, true);
+      return cb(new Error("CORS origin not allowed"));
+    },
     credentials: true,
+    methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+    allowedHeaders: ["Content-Type", "Authorization", "X-Requested-With"],
+    optionsSuccessStatus: 200,
   })
 );
 app.use(morgan(process.env.NODE_ENV === "production" ? "combined" : "dev"));
