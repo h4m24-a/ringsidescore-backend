@@ -20,7 +20,7 @@ async function findOrCreateFighter(tx, name) {
 // GET /events
 const listEvents = asyncHandler(async (req, res) => {
   const events = await prisma.event.findMany({
-    orderBy: { date: "asc" },
+    orderBy: { date: "desc" },
     include: { fights: { include: fightInclude } },
   });
   res.json({ events });
