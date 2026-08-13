@@ -103,7 +103,7 @@ const login = asyncHandler(async (req, res) => {
 // and issues a new short-lived access token.
 const refresh = asyncHandler(async (req, res) => {
   const token = req.cookies?.[REFRESH_COOKIE_NAME];
-  if (!token) return res.status(401).json({ message: "No refresh token" });
+  
 
   let payload;
   try {
