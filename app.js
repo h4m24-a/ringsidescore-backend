@@ -13,10 +13,6 @@ const { globalLimiter } = require('./middleware/rateLimiter')
 const routes = require("./routes");
 
 const app = express();
-
-app.set("trust proxy", 1);
-
-
 app.set("trust proxy", 1);
 
 const corsOptions = {
@@ -26,7 +22,12 @@ const corsOptions = {
   allowedHeaders: ["Content-Type", "Authorization"]
 };
 
+// 1. Enable CORS for all routes (MUST BE FIRST)
 app.use(cors(corsOptions));
+
+// 2. Explicitly handle Preflight OPTIONS requests for all routes
+app.options('*', cors(corsOptions));
+
 
 app.use(morgan(process.env.NODE_ENV === "production" ? "combined" : "dev"));
 app.use(express.json());
