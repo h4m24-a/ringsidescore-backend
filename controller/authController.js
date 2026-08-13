@@ -31,12 +31,19 @@ function signRefreshToken(user) {
 
 
 function refreshCookieOptions() {
+  const secure = process.env.NODE_ENV === "production";
+  // Browsers require SameSite=None to be paired with Secure. Use 'none' in
+  // production (with HTTPS) and 'lax' in development to avoid rejection.
+  const sameSite = secure ? "none" : "lax";
+  // Default domain to allow cross-subdomain cookies in prod; overridable via env
+  const domain = process.env.COOKIE_DOMAIN || (secure ? ".ringsidescore.com" : undefined);
+
   return {
-    httpOnly: true, // not readable by client-side JS — the main XSS protection here
-    secure: process.env.NODE_ENV === "production", // HTTPS only in prod; allow http in local dev
-    sameSite: "none", // allow cross-site requests (frontend and backend are on different origins)
-    partitioned: "true", // don't send the cookie on cross-site requests that aren't same-site
-    path: "/", // only sent to auth routes, not every request
+    httpOnly: true,
+    secure,
+    sameSite,
+    path: "/",
+    domain,
     maxAge: REFRESH_TOKEN_TTL_MS,
   };
 }
@@ -51,7 +58,9 @@ async function issueTokens(res, user) {
   const refreshToken = signRefreshToken(user);
 
   await storeRefreshToken(user.id, refreshToken, new Date(Date.now() + REFRESH_TOKEN_TTL_MS));
-  res.cookie(REFRESH_COOKIE_NAME, refreshToken, refreshCookieOptions());
+  const opts = refreshCookieOptions();
+  if (process.env.NODE_ENV !== "production") console.log("Set-Cookie opts:", opts);
+  res.cookie(REFRESH_COOKIE_NAME, refreshToken, opts);
 
   return accessToken;
 }
@@ -102,8 +111,15 @@ const login = asyncHandler(async (req, res) => {
 // POST /auth/refresh — reads the httpOnly cookie, rotates the refresh token,
 // and issues a new short-lived access token.
 const refresh = asyncHandler(async (req, res) => {
+  // Diagnostics: log incoming cookies to confirm browser sent them
+  console.log("/auth/refresh - headers.cookie:", req.headers.cookie);
+  console.log("/auth/refresh - parsed req.cookies:", req.cookies);
+
   const token = req.cookies?.[REFRESH_COOKIE_NAME];
-  if (!token) return res.status(401).json({ message: "No refresh token" });
+  if (!token) {
+    console.warn("No refresh token cookie present on request");
+    return res.status(401).json({ message: "No refresh token" });
+  }
 
   let payload;
   try {
