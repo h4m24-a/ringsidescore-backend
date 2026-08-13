@@ -31,12 +31,24 @@ function signRefreshToken(user) {
 
 
 function refreshCookieOptions() {
+  const secure = process.env.NODE_ENV === "production";
+  // Browsers require SameSite=None to be paired with Secure; if we're running
+  // without HTTPS in development, avoid sending SameSite=None (it would be
+  // rejected). Developers can override by setting
+  // ALLOW_SAMESITE_NONE_IN_DEV=true and running HTTPS locally.
+  let sameSite = "none";
+  if (!secure && process.env.ALLOW_SAMESITE_NONE_IN_DEV !== "true") {
+    sameSite = "lax";
+    console.warn(
+      "refreshCookieOptions: running without TLS and SameSite=None would be rejected by browsers. Using SameSite='lax' in dev. To allow None in dev, set ALLOW_SAMESITE_NONE_IN_DEV=true and run HTTPS."
+    );
+  }
+
   return {
-    httpOnly: true, // not readable by client-side JS — the main XSS protection here
-    secure: process.env.NODE_ENV === "production", // HTTPS only in prod; allow http in local dev
-    sameSite: "none", // allow cross-site requests (frontend and backend are on different origins)
-    partitioned: "none", // don't send the cookie on cross-site requests that aren't same-site
-    path: "/api/auth", // only sent to auth routes, not every request
+    httpOnly: true,
+    secure,
+    sameSite, // 'none' in production (with secure), otherwise 'lax' unless overridden
+    path: "/api/auth",
     maxAge: REFRESH_TOKEN_TTL_MS,
   };
 }
